@@ -2,7 +2,7 @@
 
 ```Go
 func main() {
-  csvData := [][]string{}
+	csvData := [][]string{}
 	csvData = append(csvData, []string{
 		"hello world", "I'm a csv line",
 	})
