@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/gddo/httputil/header"
 	"gopkg.in/kothar/brotli-go.v0/enc"
 )
@@ -108,12 +110,16 @@ func FileServer(root http.FileSystem) http.Handler {
 
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	specs := header.ParseAccept(r.Header, "Accept-Encoding")
+	log.Println(spew.Sdump(r.URL))
 	enc := []string{"br", "gzip", ""}
-	ext := []string{".br", "gz", ""}
+	ext := []string{".br", ".gz", ""}
 	for i := range enc {
 		for _, spec := range specs {
+			log.Println(spew.Sdump(spec))
 			if spec.Value == enc[i] && spec.Q > 0 || ext[i] == "" {
 				file, err := f.root.Open(r.URL.Path + ext[i])
+				log.Println(spew.Sdump(file))
+				log.Println(err)
 				if err != nil {
 					continue
 				}
