@@ -26,7 +26,7 @@ var (
 
 func CompressWebserverFiles(dir string) ([]string, error) {
 	return CompressFiles(dir, regexp.MustCompile(strings.Join(
-		[]string{"js", "css", "html", "json", "svg", "ico", "eot", "otf", "ttf", "wof"}, "$|")+"$",
+		[]string{"js", "css", "html", "json", "svg", "ico", "eot", "otf", "ttf", "woff"}, "$|")+"$",
 	))
 }
 
