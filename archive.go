@@ -26,7 +26,7 @@ var (
 
 func CompressWebserverFiles(dir string) ([]string, error) {
 	return CompressFiles(dir, regexp.MustCompile(strings.Join(
-		[]string{"js", "css", "html", "json", "ico", "eot", "otf", "ttf", "wof"}, "$|")+"$",
+		[]string{"js", "css", "html", "json", "svg", "ico", "eot", "otf", "ttf", "wof"}, "$|")+"$",
 	))
 }
 
@@ -41,18 +41,15 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 	matchedFiles := []string{}
 	err = filepath.Walk(dir, func(path string, fileInfo os.FileInfo, err error) error {
 		if err == nil && !fileInfo.IsDir() && rgx.FindString(fileInfo.Name()) != "" {
+			inputFile, err := os.Open(path)
+			if err != nil {
+				return err
+			}
 			matchedFiles = append(matchedFiles, path)
 			if !strings.HasSuffix(path, ".gz") {
-				_, err = os.Stat(filepath.Join(path, ".gz"))
-				if err != nil {
-					return err
-				}
+				_, err = os.Stat(path + ".gz")
 				if os.IsNotExist(err) {
-					inputFile, err := os.Open(path)
-					if err != nil {
-						return err
-					}
-					outputFile, err := os.Create(filepath.Join(path, ".gz"))
+					outputFile, err := os.Create(path + ".gz")
 					if err != nil {
 						return err
 					}
@@ -66,30 +63,24 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 					if err != io.EOF {
 						return err
 					}
+					inputFile.Seek(0, 0)
 				}
 			}
 			if !strings.HasSuffix(path, ".br") {
-				_, err = os.Stat(filepath.Join(path, ".br"))
-				if err != nil {
-					return err
-				}
+				_, err = os.Stat(path + ".br")
 				if os.IsNotExist(err) {
-					inputFile, err := os.Open(path)
+					btwOutput, err := os.Create(path + ".br")
 					if err != nil {
 						return err
 					}
-					outputFile, err := os.Create(filepath.Join(path, ".br"))
-					if err != nil {
-						return err
-					}
-					defer outputFile.Close()
+					defer btwOutput.Close()
 					params := enc.NewBrotliParams()
 					if regexp.MustCompile(".js$|.css$|.html$|.json$|.ico$").FindString(fileInfo.Name()) != "" {
 						params.SetMode(enc.TEXT)
 					} else if regexp.MustCompile(".eot$|.otf$|.ttf$|.woff$").FindString(fileInfo.Name()) != "" {
 						params.SetMode(enc.FONT)
 					}
-					btw := enc.NewBrotliWriter(params, outputFile)
+					btw := enc.NewBrotliWriter(params, btwOutput)
 					defer btw.Close()
 					_, err = io.Copy(btw, inputFile)
 					if err != io.EOF {
