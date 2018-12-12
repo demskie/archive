@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/gddo/httputil/header"
 	"gopkg.in/kothar/brotli-go.v0/enc"
 )
 
@@ -24,6 +26,7 @@ var (
 	ErrNothingToArchive         = errors.New("nothing to archive")
 )
 
+// CompressWebserverFiles recursively zips common webserver files in a given directory structure
 func CompressWebserverFiles(dir string) ([]string, error) {
 	return CompressFiles(dir, regexp.MustCompile(strings.Join(
 		[]string{"js", "css", "html", "json", "svg", "ico", "eot", "otf", "ttf", "woff"}, "$|")+"$",
@@ -92,6 +95,39 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 		return nil
 	})
 	return matchedFiles, err
+}
+
+type fileHandler struct {
+	root http.FileSystem
+}
+
+// FileServer will search for and serve compressed files if they are available
+func FileServer(root http.FileSystem) http.Handler {
+	return &fileHandler{root}
+}
+
+func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	enc := []string{"br", "gzip", ""}
+	ext := []string{".br", "gz", ""}
+	for i := range enc {
+		for _, spec := range header.ParseAccept(r.Header, "AcceptEncoding") {
+			if spec.Value == enc[i] || spec.Value == "*" {
+				file, err := f.root.Open(r.URL.Path + ext[i])
+				if err != nil {
+					continue
+				}
+				defer file.Close()
+				fileInfo, err := file.Stat()
+				if err != nil || fileInfo.IsDir() {
+					continue
+				}
+				w.Header().Set("Content-Encoding", enc[i])
+				http.ServeContent(w, r, r.URL.Path+ext[i], fileInfo.ModTime(), file)
+				return
+			}
+		}
+	}
+	http.NotFound(w, r)
 }
 
 type tempFile struct {
