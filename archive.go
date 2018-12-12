@@ -107,11 +107,12 @@ func FileServer(root http.FileSystem) http.Handler {
 }
 
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	specs := header.ParseAccept(r.Header, "Accept-Encoding")
 	enc := []string{"br", "gzip", ""}
 	ext := []string{".br", "gz", ""}
 	for i := range enc {
-		for _, spec := range header.ParseAccept(r.Header, "AcceptEncoding") {
-			if spec.Value == enc[i] || spec.Value == "*" {
+		for _, spec := range specs {
+			if spec.Value == enc[i] && spec.Q > 0 || ext[i] == "" {
 				file, err := f.root.Open(r.URL.Path + ext[i])
 				if err != nil {
 					continue
