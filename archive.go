@@ -60,15 +60,15 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 					}
 					defer gzw.Close()
 					_, err = io.Copy(gzw, inputFile)
-					if err != io.EOF {
+					inputFile.Seek(0, 0)
+					if err != nil || err != io.EOF {
 						return err
 					}
-					inputFile.Seek(0, 0)
 				}
 			}
 			if !strings.HasSuffix(path, ".br") {
 				_, err = os.Stat(path + ".br")
-				if os.IsNotExist(err) {
+				if err == nil || os.IsNotExist(err) {
 					btwOutput, err := os.Create(path + ".br")
 					if err != nil {
 						return err
@@ -83,7 +83,7 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 					btw := enc.NewBrotliWriter(params, btwOutput)
 					defer btw.Close()
 					_, err = io.Copy(btw, inputFile)
-					if err != io.EOF {
+					if err != nil || err != io.EOF {
 						return err
 					}
 				}
