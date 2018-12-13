@@ -109,6 +109,23 @@ func FileServer(root http.Dir) http.Handler {
 	return &fileHandler{root}
 }
 
+func (f *fileHandler) determineContentType(path string) string {
+	file, err := f.root.Open(path)
+	if err != nil {
+		var size int
+		fileInfo, err := file.Stat()
+		if err != nil && fileInfo.Size() < 512 {
+			size = int(fileInfo.Size())
+		} else {
+			size = 512
+		}
+		bytes := make([]byte, size)
+		file.Read(bytes)
+		return http.DetectContentType(bytes)
+	}
+	return http.DetectContentType([]byte{})
+}
+
 var (
 	encoders   = []string{"br", "gzip", ""}
 	extensions = []string{".br", ".gz", ""}
@@ -125,6 +142,7 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if p == "/" {
 			p = "/index.html"
 		}
+		originalPath := p
 		p = filepath.FromSlash(p + ext)
 		file, err := f.root.Open(p)
 		log.Printf("result of open: %v err: %v\n", p, err)
@@ -142,6 +160,7 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return ErrPathIsDirectory
 		}
 		w.Header().Set("Content-Encoding", enc)
+		w.Header().Set("Content-Type", f.determineContentType(originalPath))
 		log.Printf("serving %v for %v\n", p, r.URL.Path)
 		http.ServeContent(w, r, r.URL.Path, fileInfo.ModTime(), file)
 		return nil
