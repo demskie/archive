@@ -22,6 +22,7 @@ import (
 
 // package level errors
 var (
+	ErrPathIsDirectory          = errors.New("path is a directory")
 	ErrPathIsNotDirectory       = errors.New("path is not a directory")
 	ErrArchiverHasBeenDestroyed = errors.New("archiver has been destroyed")
 	ErrNothingToArchive         = errors.New("nothing to archive")
@@ -113,6 +114,7 @@ var (
 )
 
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Printf("starting to serve %v\n", r.URL.Path)
 	tryServingContent := func(enc, ext string) error {
 		file, err := f.root.Open(r.URL.Path + ext)
 		log.Printf("result of open: %v err: %v\n", r.URL.Path+ext, err)
@@ -121,9 +123,13 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		defer file.Close()
 		fileInfo, err := file.Stat()
-		if err != nil || fileInfo.IsDir() {
+		if err != nil {
 			log.Printf("file.Stat() returned an error: %v\n", err)
 			return err
+		}
+		if fileInfo.IsDir() {
+			log.Printf("file.IsDir() returned true\n")
+			return ErrPathIsDirectory
 		}
 		w.Header().Set("Content-Encoding", enc)
 		log.Printf("serving %v for %v\n", r.URL.Path+ext, fileInfo.Name())
