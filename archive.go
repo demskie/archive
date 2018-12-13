@@ -30,6 +30,7 @@ var (
 	ErrPathIsNotDirectory       = errors.New("path is not a directory")
 	ErrArchiverHasBeenDestroyed = errors.New("archiver has been destroyed")
 	ErrNothingToArchive         = errors.New("nothing to archive")
+	ErrContentTypeNotFound      = errors.New("content type not found")
 )
 
 // CompressWebserverFiles recursively zips common webserver files in a given directory structure
@@ -52,16 +53,16 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 		gzw     *gzip.Writer
 		brw     *enc.BrotliWriter
 	)
-	err = filepath.Walk(dir, func(path string, fileInfo os.FileInfo, err error) error {
+	err = filepath.Walk(dir, func(p string, fileInfo os.FileInfo, err error) error {
 		if err == nil && !fileInfo.IsDir() && rgx.FindString(fileInfo.Name()) != "" {
-			inputFile, err := os.Open(path)
+			inputFile, err := os.Open(p)
 			if err != nil {
 				return err
 			}
 			defer inputFile.Close()
-			matches = append(matches, path)
-			if filepath.Ext(path) != ".gz" && filepath.Ext(path) != ".br" {
-				gzOut, err := os.Create(path + ".gz")
+			matches = append(matches, p)
+			if filepath.Ext(p) != ".gz" && filepath.Ext(p) != ".br" {
+				gzOut, err := os.Create(p + ".gz")
 				if err != nil {
 					return err
 				}
@@ -72,7 +73,7 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 				}
 				io.Copy(gzw, inputFile)
 				gzw.Close()
-				brOut, err := os.Create(path + ".br")
+				brOut, err := os.Create(p + ".br")
 				if err != nil {
 					return err
 				}
@@ -89,37 +90,64 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 }
 
 type fileHandler struct {
-	root http.Dir
+	mtx              *sync.RWMutex
+	rootDir          http.Dir
+	contentTypeCache map[string]string
 }
 
 // FileServer will search for and serve compressed files if they are available
 func FileServer(root http.Dir) http.Handler {
-	return &fileHandler{root}
+	return &fileHandler{
+		mtx:              &sync.RWMutex{},
+		rootDir:          root,
+		contentTypeCache: map[string]string{},
+	}
 }
 
-func (f *fileHandler) determineContentType(path string) string {
-	contentType := mime.TypeByExtension(filepath.Ext(path))
+func (f *fileHandler) getCachedContentType(p string) (string, error) {
+	f.mtx.RLock()
+	val, exists := f.contentTypeCache[p]
+	f.mtx.RUnlock()
+	if !exists {
+		return val, ErrContentTypeNotFound
+	}
+	return val, nil
+}
+
+func (f *fileHandler) cacheContentType(p, contentType string) {
+	f.mtx.Lock()
+	f.contentTypeCache[p] = contentType
+	f.mtx.Unlock()
+	return
+}
+
+func (f *fileHandler) determineContentType(p string, file http.File) string {
+	contentType, _ := f.getCachedContentType(p)
 	if contentType != "" {
 		return contentType
 	}
-	typeMatch, _ := filetype.MatchFile(path)
+	contentType = mime.TypeByExtension(filepath.Ext(p))
+	if contentType != "" {
+		f.cacheContentType(p, contentType)
+		return contentType
+	}
+	typeMatch, _ := filetype.MatchFile(p)
 	if typeMatch.MIME.Value != "" {
+		f.cacheContentType(p, typeMatch.MIME.Value)
 		return typeMatch.MIME.Value
 	}
-	file, err := f.root.Open(path)
-	if err != nil {
-		var size int
-		fileInfo, err := file.Stat()
-		if err != nil && fileInfo.Size() < 512 {
-			size = int(fileInfo.Size())
-		} else {
-			size = 512
-		}
-		bytes := make([]byte, size)
-		file.Read(bytes)
-		return http.DetectContentType(bytes)
+	var size int
+	fileInfo, err := file.Stat()
+	if err != nil && fileInfo.Size() < 512 {
+		size = int(fileInfo.Size())
+	} else {
+		size = 512
 	}
-	return "application/octet-stream"
+	bytes := make([]byte, size)
+	file.Read(bytes)
+	contentType = http.DetectContentType(bytes)
+	f.cacheContentType(p, contentType)
+	return contentType
 }
 
 var (
@@ -140,7 +168,7 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		originalPath := p
 		p = filepath.FromSlash(p + ext)
-		file, err := f.root.Open(p)
+		file, err := f.rootDir.Open(p)
 		log.Printf("result of open: %v err: %v\n", p, err)
 		if err != nil {
 			return err
@@ -156,7 +184,7 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return ErrPathIsDirectory
 		}
 		w.Header().Set("Content-Encoding", enc)
-		w.Header().Set("Content-Type", f.determineContentType(originalPath))
+		w.Header().Set("Content-Type", f.determineContentType(originalPath, file))
 		log.Printf("serving %v for %v\n", p, r.URL.Path)
 		http.ServeContent(w, r, r.URL.Path, fileInfo.ModTime(), file)
 		return nil
@@ -261,7 +289,7 @@ func (a *Archiver) AddCSV(filename string, lines [][]string) error {
 }
 
 // CreateArchive moves all pending temporary files into a tar.gz
-func (a *Archiver) CreateArchive(path string) error {
+func (a *Archiver) CreateArchive(p string) error {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 	// no need to continue if there is nothing to archive
@@ -269,8 +297,8 @@ func (a *Archiver) CreateArchive(path string) error {
 		return ErrNothingToArchive
 	}
 	// create an empty tar.gz file
-	path = strings.Split(path, ".")[0] + ".tar.gz"
-	outputFile, err := os.Create(path)
+	p = strings.Split(p, ".")[0] + ".tar.gz"
+	outputFile, err := os.Create(p)
 	if err != nil {
 		return err
 	}
