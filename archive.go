@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -100,11 +101,11 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 }
 
 type fileHandler struct {
-	root http.FileSystem
+	root http.Dir
 }
 
 // FileServer will search for and serve compressed files if they are available
-func FileServer(root http.FileSystem) http.Handler {
+func FileServer(root http.Dir) http.Handler {
 	return &fileHandler{root}
 }
 
@@ -116,8 +117,17 @@ var (
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("starting to serve %v\n", r.URL.Path)
 	tryServingContent := func(enc, ext string) error {
-		file, err := f.root.Open(r.URL.Path + ext)
-		log.Printf("result of open: %v err: %v\n", r.URL.Path+ext, err)
+		p := r.URL.Path
+		if !strings.HasPrefix(p, "/") {
+			p = "/" + p
+		}
+		p = path.Clean(p)
+		if p == "/" {
+			p = "/index.html"
+		}
+		p = path.Join(string(f.root), filepath.FromSlash(p+ext))
+		file, err := f.root.Open(p)
+		log.Printf("result of open: %v err: %v\n", p, err)
 		if err != nil {
 			return err
 		}
@@ -132,8 +142,8 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return ErrPathIsDirectory
 		}
 		w.Header().Set("Content-Encoding", enc)
-		log.Printf("serving %v for %v\n", r.URL.Path+ext, fileInfo.Name())
-		http.ServeContent(w, r, r.URL.Path+ext, fileInfo.ModTime(), file)
+		log.Printf("serving %v for %v\n", p, r.URL.Path)
+		http.ServeContent(w, r, r.URL.Path, fileInfo.ModTime(), file)
 		return nil
 	}
 	specs := header.ParseAccept(r.Header, "Accept-Encoding")
