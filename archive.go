@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -104,6 +105,10 @@ func FileServer(root http.Dir) http.Handler {
 }
 
 func (f *fileHandler) determineContentType(path string) string {
+	contentType := mime.TypeByExtension(filepath.Ext(path))
+	if contentType != "" {
+		return contentType
+	}
 	file, err := f.root.Open(path)
 	if err != nil {
 		var size int
