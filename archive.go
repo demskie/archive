@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/h2non/filetype"
+
 	"github.com/golang/gddo/httputil/header"
 	"gopkg.in/kothar/brotli-go.v0/enc"
 )
@@ -45,7 +47,11 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 	} else if !fileInfo.IsDir() {
 		return nil, ErrPathIsNotDirectory
 	}
-	matchedFiles := []string{}
+	var (
+		matches = []string{}
+		gzw     *gzip.Writer
+		brw     *enc.BrotliWriter
+	)
 	err = filepath.Walk(dir, func(path string, fileInfo os.FileInfo, err error) error {
 		if err == nil && !fileInfo.IsDir() && rgx.FindString(fileInfo.Name()) != "" {
 			inputFile, err := os.Open(path)
@@ -53,39 +59,33 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 				return err
 			}
 			defer inputFile.Close()
-			matchedFiles = append(matchedFiles, path)
+			matches = append(matches, path)
 			if filepath.Ext(path) != ".gz" && filepath.Ext(path) != ".br" {
 				gzOut, err := os.Create(path + ".gz")
 				if err != nil {
 					return err
 				}
 				defer gzOut.Close()
-				gzw, err := gzip.NewWriterLevel(gzOut, gzip.BestCompression)
+				gzw, err = gzip.NewWriterLevel(gzOut, gzip.BestCompression)
 				if err != nil {
 					return err
 				}
-				defer gzw.Close()
 				io.Copy(gzw, inputFile)
+				gzw.Close()
 				brOut, err := os.Create(path + ".br")
 				if err != nil {
 					return err
 				}
 				defer brOut.Close()
-				params := enc.NewBrotliParams()
-				if regexp.MustCompile(".js$|.css$|.html$|.json$|.ico$").FindString(fileInfo.Name()) != "" {
-					params.SetMode(enc.TEXT)
-				} else if regexp.MustCompile(".eot$|.otf$|.ttf$|.woff$").FindString(fileInfo.Name()) != "" {
-					params.SetMode(enc.FONT)
-				}
-				brw := enc.NewBrotliWriter(params, brOut)
-				defer brw.Close()
+				brw = enc.NewBrotliWriter(nil, brOut)
 				inputFile.Seek(0, 0)
 				io.Copy(brw, inputFile)
+				brw.Close()
 			}
 		}
 		return nil
 	})
-	return matchedFiles, err
+	return matches, err
 }
 
 type fileHandler struct {
@@ -99,6 +99,10 @@ func FileServer(root http.Dir) http.Handler {
 
 func (f *fileHandler) determineContentType(path string) string {
 	contentType := mime.TypeByExtension(filepath.Ext(path))
+	if contentType != "" {
+		return contentType
+	}
+	contentType = filetype.GetType(strings.TrimPrefix(filepath.Ext(path), ".")).MIME.Type
 	if contentType != "" {
 		return contentType
 	}
