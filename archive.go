@@ -52,42 +52,35 @@ func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
 			if err != nil {
 				return err
 			}
+			defer inputFile.Close()
 			matchedFiles = append(matchedFiles, path)
-			if !strings.HasSuffix(path, ".gz") {
-				outputFile, err := os.Create(path + ".gz")
+			if filepath.Ext(path) != ".gz" && filepath.Ext(path) != ".br" {
+				gzOut, err := os.Create(path + ".gz")
 				if err != nil {
 					return err
 				}
-				defer outputFile.Close()
-				gzw, err := gzip.NewWriterLevel(outputFile, gzip.BestCompression)
+				defer gzOut.Close()
+				gzw, err := gzip.NewWriterLevel(gzOut, gzip.BestCompression)
 				if err != nil {
 					return err
 				}
 				defer gzw.Close()
-				_, err = io.Copy(gzw, inputFile)
-				inputFile.Seek(0, 0)
-				if err != nil || err != io.EOF {
-					return err
-				}
-			}
-			if !strings.HasSuffix(path, ".br") {
-				btwOutput, err := os.Create(path + ".br")
+				io.Copy(gzw, inputFile)
+				brOut, err := os.Create(path + ".br")
 				if err != nil {
 					return err
 				}
-				defer btwOutput.Close()
+				defer brOut.Close()
 				params := enc.NewBrotliParams()
 				if regexp.MustCompile(".js$|.css$|.html$|.json$|.ico$").FindString(fileInfo.Name()) != "" {
 					params.SetMode(enc.TEXT)
 				} else if regexp.MustCompile(".eot$|.otf$|.ttf$|.woff$").FindString(fileInfo.Name()) != "" {
 					params.SetMode(enc.FONT)
 				}
-				btw := enc.NewBrotliWriter(params, btwOutput)
-				defer btw.Close()
-				_, err = io.Copy(btw, inputFile)
-				if err != nil || err != io.EOF {
-					return err
-				}
+				brw := enc.NewBrotliWriter(params, brOut)
+				defer brw.Close()
+				inputFile.Seek(0, 0)
+				io.Copy(brw, inputFile)
 			}
 		}
 		return nil
