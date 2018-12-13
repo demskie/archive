@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -18,9 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/h2non/filetype"
-
 	"github.com/golang/gddo/httputil/header"
+	"github.com/h2non/filetype"
 	"gopkg.in/kothar/brotli-go.v0/enc"
 )
 
@@ -156,7 +154,6 @@ var (
 )
 
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("starting to serve %v\n", r.URL.Path)
 	tryServingContent := func(enc, ext string) error {
 		p := r.URL.Path
 		if !strings.HasPrefix(p, "/") {
@@ -169,23 +166,19 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		originalPath := p
 		p = filepath.FromSlash(p + ext)
 		file, err := f.rootDir.Open(p)
-		log.Printf("result of open: %v err: %v\n", p, err)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
 		fileInfo, err := file.Stat()
 		if err != nil {
-			log.Printf("file.Stat() returned an error: %v\n", err)
 			return err
 		}
 		if fileInfo.IsDir() {
-			log.Printf("file.IsDir() returned true\n")
 			return ErrPathIsDirectory
 		}
 		w.Header().Set("Content-Encoding", enc)
 		w.Header().Set("Content-Type", f.determineContentType(originalPath, file))
-		log.Printf("serving %v for %v\n", p, r.URL.Path)
 		http.ServeContent(w, r, r.URL.Path, fileInfo.ModTime(), file)
 		return nil
 	}
@@ -197,7 +190,6 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for _, spec := range specs {
-			log.Printf("trying spec.Value: %v spec.Q: %v\n", spec.Value, spec.Q)
 			if spec.Value == encoders[i] && spec.Q > 0 || extensions[i] == "" {
 				if tryServingContent(encoders[i], extensions[i]) == nil {
 					return
@@ -205,7 +197,6 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	log.Printf("failed to serve %v\n", r.URL.Path)
 	http.NotFound(w, r)
 }
 
