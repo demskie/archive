@@ -125,7 +125,7 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if p == "/" {
 			p = "/index.html"
 		}
-		p = path.Join(string(f.root), filepath.FromSlash(p+ext))
+		p = filepath.FromSlash(p + ext)
 		file, err := f.root.Open(p)
 		log.Printf("result of open: %v err: %v\n", p, err)
 		if err != nil {
