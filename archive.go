@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/gddo/httputil/header"
 	"gopkg.in/kothar/brotli-go.v0/enc"
 )
@@ -110,30 +109,31 @@ func FileServer(root http.FileSystem) http.Handler {
 
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	specs := header.ParseAccept(r.Header, "Accept-Encoding")
-	log.Println(spew.Sdump(r.URL))
 	enc := []string{"br", "gzip", ""}
 	ext := []string{".br", ".gz", ""}
 	for i := range enc {
 		for _, spec := range specs {
-			log.Println(spew.Sdump(spec))
+			log.Printf("trying spec.Value: %v spec.Q: %v\n", spec.Value, spec.Q)
 			if spec.Value == enc[i] && spec.Q > 0 || ext[i] == "" {
 				file, err := f.root.Open(r.URL.Path + ext[i])
-				log.Println(spew.Sdump(file))
-				log.Println(err)
+				log.Printf("result of open: %v err: %v\n", r.URL.Path+ext[i], err)
 				if err != nil {
 					continue
 				}
 				defer file.Close()
 				fileInfo, err := file.Stat()
 				if err != nil || fileInfo.IsDir() {
+					log.Printf("file.Stat() returned an error: %v\n", err)
 					continue
 				}
 				w.Header().Set("Content-Encoding", enc[i])
+				log.Printf("serving %v for %v\n", r.URL.Path+ext[i], fileInfo.Name())
 				http.ServeContent(w, r, r.URL.Path+ext[i], fileInfo.ModTime(), file)
 				return
 			}
 		}
 	}
+	log.Printf("failed to serve %v\n", r.URL.Path)
 	http.NotFound(w, r)
 }
 
