@@ -102,9 +102,9 @@ func (f *fileHandler) determineContentType(path string) string {
 	if contentType != "" {
 		return contentType
 	}
-	contentType = filetype.GetType(strings.TrimPrefix(filepath.Ext(path), ".")).MIME.Type
-	if contentType != "" {
-		return contentType
+	typeMatch, _ := filetype.MatchFile(path)
+	if typeMatch.MIME.Value != "" {
+		return typeMatch.MIME.Value
 	}
 	file, err := f.root.Open(path)
 	if err != nil {
@@ -119,7 +119,7 @@ func (f *fileHandler) determineContentType(path string) string {
 		file.Read(bytes)
 		return http.DetectContentType(bytes)
 	}
-	return http.DetectContentType([]byte{})
+	return "application/octet-stream"
 }
 
 var (
