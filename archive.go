@@ -107,29 +107,42 @@ func FileServer(root http.FileSystem) http.Handler {
 	return &fileHandler{root}
 }
 
+var (
+	encoders   = []string{"br", "gzip", ""}
+	extensions = []string{".br", ".gz", ""}
+)
+
 func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	tryServingContent := func(enc, ext string) error {
+		file, err := f.root.Open(r.URL.Path + ext)
+		log.Printf("result of open: %v err: %v\n", r.URL.Path+ext, err)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		fileInfo, err := file.Stat()
+		if err != nil || fileInfo.IsDir() {
+			log.Printf("file.Stat() returned an error: %v\n", err)
+			return err
+		}
+		w.Header().Set("Content-Encoding", enc)
+		log.Printf("serving %v for %v\n", r.URL.Path+ext, fileInfo.Name())
+		http.ServeContent(w, r, r.URL.Path+ext, fileInfo.ModTime(), file)
+		return nil
+	}
 	specs := header.ParseAccept(r.Header, "Accept-Encoding")
-	enc := []string{"br", "gzip", ""}
-	ext := []string{".br", ".gz", ""}
-	for i := range enc {
+	for i := range encoders {
+		if len(specs) == 0 {
+			if tryServingContent(encoders[i], extensions[i]) == nil {
+				return
+			}
+		}
 		for _, spec := range specs {
 			log.Printf("trying spec.Value: %v spec.Q: %v\n", spec.Value, spec.Q)
-			if spec.Value == enc[i] && spec.Q > 0 || ext[i] == "" {
-				file, err := f.root.Open(r.URL.Path + ext[i])
-				log.Printf("result of open: %v err: %v\n", r.URL.Path+ext[i], err)
-				if err != nil {
-					continue
+			if spec.Value == encoders[i] && spec.Q > 0 || extensions[i] == "" {
+				if tryServingContent(encoders[i], extensions[i]) == nil {
+					return
 				}
-				defer file.Close()
-				fileInfo, err := file.Stat()
-				if err != nil || fileInfo.IsDir() {
-					log.Printf("file.Stat() returned an error: %v\n", err)
-					continue
-				}
-				w.Header().Set("Content-Encoding", enc[i])
-				log.Printf("serving %v for %v\n", r.URL.Path+ext[i], fileInfo.Name())
-				http.ServeContent(w, r, r.URL.Path+ext[i], fileInfo.ModTime(), file)
-				return
 			}
 		}
 	}
