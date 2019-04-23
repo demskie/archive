@@ -40,7 +40,8 @@ func CompressWebserverFiles(dir string) ([]string, error) {
 
 // CompressFiles recursively zips of all regex matched files in a given directory structure
 func CompressFiles(dir string, rgx *regexp.Regexp) ([]string, error) {
-	fileInfo, err := os.Stat(filepath.Clean(dir))
+	dir = filepath.Clean(dir)
+	fileInfo, err := os.Stat(dir)
 	if err != nil {
 		return nil, err
 	} else if !fileInfo.IsDir() {
