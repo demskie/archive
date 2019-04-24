@@ -10,7 +10,6 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -160,12 +159,12 @@ func (f *fileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(p, "/") {
 			p = "/" + p
 		}
-		p = path.Clean(p)
 		if p == "/" {
 			p = "/index.html"
 		}
 		originalPath := p
 		p = filepath.FromSlash(p + ext)
+		p = strings.Replace(p, "\\", "/", -1) // for Windows
 		file, err := f.rootDir.Open(p)
 		if err != nil {
 			return err
