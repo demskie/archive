@@ -1,0 +1,6 @@
+github.com/golang/gddo v0.0.0-20190419222130-af0f2af80721 h1:KRMr9A3qfbVM7iV/WcLY/rL5LICqwMHLhwRXKu99fXw=
+github.com/golang/gddo v0.0.0-20190419222130-af0f2af80721/go.mod h1:xEhNfoBDX1hzLm2Nf80qUvZ2sVwoMZ8d6IE2SrsQfh4=
+github.com/h2non/filetype v1.0.8 h1:le8gpf+FQA0/DlDABbtisA1KiTS0Xi+YSC/E8yY3Y14=
+github.com/h2non/filetype v1.0.8/go.mod h1:isekKqOuhMj+s/7r3rIeTErIRy4Rub5uBWHfvMusLMU=
+gopkg.in/kothar/brotli-go.v0 v0.0.0-20170728081549-771231d473d6 h1:M8GdJL0oESXVmjOOT3upJyFkKs5o1jJERiKYOZjVes0=
+gopkg.in/kothar/brotli-go.v0 v0.0.0-20170728081549-771231d473d6/go.mod h1:nVee4zUY+UoXjOfM57w44w2XjsoIqIKd4A9vktFSQ6I=
